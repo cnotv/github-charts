@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Chart from '../components/Chart.vue'
+
 // https://github.com/octokit/core.js#plugins
 import { Octokit } from "@octokit/core";
 // https://github.com/octokit/plugin-paginate-rest.js/
@@ -9,23 +11,16 @@ import { ref } from 'vue'
 const MyOctokit = Octokit.plugin(paginateRest);
 const octokit = new MyOctokit({ auth: import.meta.env.API_TOKEN });
 
-// Types
-interface Issues { html_url: string; number: number; title: string; }
-
-interface Items {
-  date: { start: string; end: string; };
-  list: Issues[];
-}[]
-
 // Data
 const openedIssues = ref([] as Items[]);
+const closedIssues = ref([] as Items[]);
 
 // Constants
 const owner = 'rancher';
 const repo = 'dashboard';
 const labels = 'kind/bug';
 
-const dates = [
+const dateRanges = [
   ['2023-01-01', '2023-01-30'],
   ['2023-02-01', '2023-02-28'],
   ['2023-03-01', '2023-03-30'],
@@ -43,7 +38,7 @@ const dates = [
 // Functions
 const formatDate = (date?: string) => (date ? new Date(date) : new Date()).toJSON().slice(0, 10);
 
-const getOpenedIssues = async (start: string, end: string) => {
+const getIssues = async (state: "open" | "closed", start: string, end: string) => {
   const list = await octokit.paginate(
   "GET /repos/{owner}/{repo}/issues",{
     owner,
@@ -51,25 +46,50 @@ const getOpenedIssues = async (start: string, end: string) => {
     labels,
       per_page: 100,
     sort: 'created',
-    since: `${start}..${end}`,
+      since: `${start}..${end}`,
+    state
   },
   (response) => response.data.map(({ html_url, number, title }) => ({ html_url, number, title })),
   )
-  openedIssues.value.push({ date: { start, end }, list})
+  return { date: { start, end }, list}
 }
+
+const getIssueRange = (state: "open" | "closed") => {
+  return Promise.all(dateRanges.map(
+    ([start, end]) => getIssues(state, formatDate(start), formatDate(end))
+  ))
+}
+
+//   const stats = [
+//   {date: {start: '2023-01-01', end: '2023-01-30'}, list: Array(283)},
+// {date: {start: '2023-02-01', end: '2023-02-28'}, list: Array(271)},
+// {date: {start: '2023-03-01', end: '2023-03-30'}, list: Array(244)},
+// {date: {start: '2023-04-01', end: '2023-04-30'}, list: Array(238)},
+// {date: {start: '2023-05-01', end: '2023-05-30'}, list: Array(229)},
+// {date: {start: '2023-06-01', end: '2023-06-30'}, list: Array(218)},
+// {date: {start: '2023-07-01', end: '2023-07-30'}, list: Array(202)},
+// {date: {start: '2023-08-01', end: '2023-08-30'}, list: Array(184)},
+// {date: {start: '2023-10-01', end: '2023-10-30'}, list: Array(49)},
+// {date: {start: '2023-11-01', end: '2023-11-30'}, list: Array(0)},
+// {date: {start: '2023-12-01', end: '2023-12-30'}, list: Array(0)},
+// ]
+// openedIssues.value = stats
+// closedIssues.value = stats
 
 // Init
 (async () => {
-  openedIssues.value = []
-
-  return dates.forEach(([start, end]) => getOpenedIssues(formatDate(start), formatDate(end)))
+  openedIssues.value = await getIssueRange('open')
+  closedIssues.value = await getIssueRange('closed')
 })()
 </script>
 
 <template>
   <main>
-    <h1>Opened Bug Issues: </h1>
-    <div
+    <h1>Opened vs closed Bug Issues: </h1>
+    <Chart :data="openedIssues.map(item => ({date: item.date.start, value: item.list.length}))"/>
+    <Chart :data="closedIssues.map(item => ({date: item.date.start, value: item.list.length}))"/>
+
+    <!-- <div
       v-for="item of openedIssues"
     >
       <details>
@@ -84,6 +104,6 @@ const getOpenedIssues = async (start: string, end: string) => {
         </li>
       </ul>
     </details>
-    </div>
+    </div> -->
   </main>
 </template>
