@@ -3,11 +3,19 @@ import Chart from '../components/Chart.vue'
 
 // https://github.com/octokit/core.js#plugins
 import { Octokit } from "@octokit/core";
+import { createAppAuth } from "@octokit/auth-app"
 // https://github.com/octokit/plugin-paginate-rest.js/
 import { paginateRest } from "@octokit/plugin-paginate-rest";
 import { ref } from 'vue'
 
 // Octokit
+const auth = createAppAuth({
+  appId: import.meta.env.VITE_APP_ID,
+  privateKey: import.meta.env.VITE_PRIVATE_KEY,
+  clientId: import.meta.env.VITE_CLIENT_ID,
+  clientSecret: import.meta.env.VITE_APP_SECRET,
+});
+
 const MyOctokit = Octokit.plugin(paginateRest);
 const octokit = new MyOctokit({ auth: import.meta.env.API_TOKEN });
 
@@ -78,8 +86,16 @@ const getIssueRange = (state: "open" | "closed") => {
 
 // Init
 (async () => {
-  openedIssues.value = await getIssueRange('open')
-  closedIssues.value = await getIssueRange('closed')
+  try {
+    // Retrieve JSON Web Token (JWT) to authenticate as app
+    const appAuthentication = await auth({ type: "app" });
+    console.log(appAuthentication)
+
+    openedIssues.value = await getIssueRange('open')
+    closedIssues.value = await getIssueRange('closed')
+  } catch (error) {
+    // console.error(error);
+  }
 })()
 </script>
 
